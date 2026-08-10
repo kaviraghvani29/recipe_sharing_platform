@@ -56,12 +56,61 @@ exports.createRecipe = async (req, res) => {
 
 exports.getAllRecipes = async (req, res) => {
   try {
-    const recipes = await Recipe.find()
+    const { search, category } = req.query;
+
+    //pagination
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+
+    //skip
+    const skip = (page - 1) * limit;
+
+    //build query
+    const query = {};
+
+    //search by title or description
+    if (search) {
+      query.$or = [
+        {
+          title: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+        {
+          description: {
+            $regex: search,
+            $options: "i",
+          },
+        },
+      ];
+    }
+
+    //filter by category
+    if (category) {
+      query.category = {
+        $regex: `^${category}$`,
+        $options: "i",
+      };
+    }
+
+    // get recipe
+    const recipes = await Recipe.find(query)
       .populate("author", "name email")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    // total matching recipes
+    const totalRecipes = await Recipe.countDocuments(query);
 
     return res.status(200).json({
       success: true,
+      count: recipes.length,
+      totalRecipes,
+      currentPage: page,
+      totalPages: Math.ceil(totalRecipes / limit),
       recipes,
     });
   } catch (error) {
